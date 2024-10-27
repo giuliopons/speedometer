@@ -136,19 +136,19 @@ void loop() {
     // check buttons and perform actions
     // --------------------------------------------------------------
     // button
-    byte b = digitalRead(buttonPin1);    // 0 pressed, 1 not pressed
+    byte b1 = digitalRead(buttonPin1);    // 0 pressed, 1 not pressed
+    byte b2 = digitalRead(buttonPin2);    // 0 pressed, 1 not pressed
     
-    if(b == IS_PRESSED && button1_status == IS_NOT_PRESSED) {
+    if(b1 == IS_PRESSED && button1_status == IS_NOT_PRESSED) {
       //
       // button has been pressed
       button1_status = IS_PRESSED;
     }
-    if(b == IS_NOT_PRESSED && button1_status == IS_PRESSED) {
+    if(b1 == IS_NOT_PRESSED && button1_status == IS_PRESSED) {
       // button has been released 
       function++;
       if (function>3) function = 0;
       
-
       // display changed function
       String f = "";
       if (function == 0) f="km/h";
@@ -164,12 +164,18 @@ void loop() {
     if(button1_status==IS_NOT_PRESSED && millis()>t_but1 && t_but1 > 0) {
       // terminate showing changed function
       alpha4.clear(); 
-
+      t_but1 = 0; // now display can be used
 
     }
     // --------------------------------------------------------------
 
-    // delay(50);
+
+
+
+
+
+
+    //delay(50);
 
 
     // status:
