@@ -89,11 +89,7 @@ void setup() {
   alpha4.clear();
   alpha4.writeDisplay();
 
-  String s = "km/h";
-  ledprint(s.c_str(),&alpha4,0);
-  delay(500);
-  alpha4.clear();
-  alpha4.writeDisplay();
+  showFunction();
 
   // attach an interrupt to the change of the digital pin of the reed sensor
   // everytime the reed changes the interrupt function is called
@@ -119,6 +115,16 @@ unsigned long sec;
 bool asteriskmode;
 
 
+// display the function and set the timer to reset display
+void showFunction() {
+  String f = "";
+  if (function == 0) f="km/h";
+  if (function == 1) f="dist";
+  if (function == 2) f="giri";
+  if (function == 3) f="time";
+  ledprint(f.c_str(),&alpha4,0);
+  t_but1 = millis() + 1000; // display is showing function for a second
+}
 
 
 void loop() {
@@ -150,14 +156,7 @@ void loop() {
       if (function>3) function = 0;
       
       // display changed function
-      String f = "";
-      if (function == 0) f="km/h";
-      if (function == 1) f="dist";
-      if (function == 2) f="giri";
-      if (function == 3) f="time";
-      ledprint(f.c_str(),&alpha4,0);
-
-      t_but1 = millis() + 1000; // display is showing something for a second
+      showFunction();
 
       button1_status = IS_NOT_PRESSED;
     }
@@ -244,6 +243,7 @@ void loop() {
             sm.remove(sm.length()-1,1);
           }
         } else {
+          // @todo smooth numbers also here...
           sm = String(round(m));
           if(m < 100) sm = " "+sm; // left pad     
           if(m < 10) sm = " "+sm;  // left pad               
@@ -314,7 +314,7 @@ void loop() {
    v0=v1;
    // calculate new speed (km/h) (kph)
    v1 = round ( (count*p / deltat) * 3.6 * 10.0 ) / 10.0;
-   Serial.println("\nv1:" + (String)v1 + " count:"+(String)count);
+   // Serial.println("\nv1:" + (String)v1 + " count:"+(String)count);
    count=0;
 
 }
