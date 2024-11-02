@@ -12,4 +12,19 @@ Special features include using interrupts for spin detection, gradually changing
 The 3D case and other information are provided on 
 https://hackaday.io/project/199037-custom-arduino-nike-speedometer
 
+## Instructions
+
+To change function press left button, this will cycle between functions:
+
+- Speed
+- Distance
+- Rounds (spins of the wheel)
+- Time
+
+The right button switches through sub-functions (or "modes"):
+
+- Speed: kph / mps / mean in kph
+- Distance: show units / hide units
+- Rounds: total spins / rpm
+
 
