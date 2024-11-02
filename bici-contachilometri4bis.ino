@@ -59,8 +59,9 @@ float v1 = 0;       // current speed value
 float v0 = 0;       // previous speed value
 float m1 = 0;       // current meters
 float m0 = 0;       // previous meters
+
 //
-// I store 2 values to gradually move numbers from previous speed to current speed
+// Store 2 values (m0 and m1, v0 and v1) to gradually move numbers from previous speed to current speed
 // to have a better smooth display movement
 //
 
@@ -74,7 +75,7 @@ unsigned long t_dis = 0;     // timer for button1, when > 0 display is in use to
 unsigned long timepass;       // timer for tempo
 
 byte function = 0;             // 0 =show km/h   1= show km     2= show giri    3 = show elapsed time
-byte mode = 0;                 // 0/1  show variation of each function
+byte mode = 0;                 // 0/1/2...  show variation of each function
 
 
 unsigned int spin = 0;         // max 65.535 spins => max 146km 
@@ -120,7 +121,7 @@ void magnetPassage(){
 // function displayed is determined by function and mode
 void showFunction() {
   String f = "";
-  if (function == 0) { if(mode==0) f="km/h"; else f=" m/s"; }
+  if (function == 0) { if(mode==0) f=" KPH"; if (mode==1) f=" MPS"; if (mode==2) f="mean";}
   if (function == 1) { if(mode==0) f="dist"; else f= m1 > 9999 ? "km  " : "metr"; }
   if (function == 2) f="giri";
   if (function == 3) f="time";
@@ -135,7 +136,7 @@ float slideNumber( float from, float to, float inc, int pos, String u ) {
    if( ( to > from && from+inc < to) || (to < from && from + inc > 0) ) from = from+inc;
    
   if(t_dis==0) {
-    String s = (String)round(from);
+    String s = (String)int(from);
 
     s = s + u;
 
@@ -150,6 +151,10 @@ float slideNumber( float from, float to, float inc, int pos, String u ) {
  return from;
   
 }
+
+
+
+
 
 void loop() {
 
@@ -199,7 +204,12 @@ void loop() {
      button2_status = IS_PRESSED;
     }
     if(b2 == IS_NOT_PRESSED && button2_status == IS_PRESSED) {
-      if (mode == 0) mode = 1; else mode = 0;
+      mode++;
+      if(function ==0 && mode==3) mode=0;
+      if(function ==1 && mode==2) mode=0;
+      if(function ==2) mode=0;
+      if(function ==3) mode=0;
+      
      button2_status = IS_NOT_PRESSED;
       // display changed function
       showFunction();     
@@ -209,8 +219,9 @@ void loop() {
  
     if (function==0) {
         // if enaugh time has passed print speed, show variation gradually
-        inc = (v1-v0) / 10.0;
+        inc = (v1-v0) > 0 ? .2 : -.2;
         v0 = slideNumber( v0, v1, inc, 1, "" );
+        
     }
 
 
@@ -336,8 +347,13 @@ void loop() {
    // calculate new speed (km/h) (kph)
    if( mode == 0) {
       v1 = round ( (count*p / deltat) * 3.6 * 10.0 ) / 10.0; 
-   } else {
+   }
+   if(mode==1)  // mps
+   {
       v1 = round ( (count*p / deltat) * 10.0 ) / 10.0; 
+   }
+   if(mode==2) {   //kph  mean value
+      v1 = round ( (spin*p / sec) * 3.6 * 10.0 ) / 10.0;
    }
    
    count=0; // reset counter for spins in deltat seconds
