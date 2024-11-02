@@ -121,7 +121,7 @@ void magnetPassage(){
 void showFunction() {
   String f = "";
   if (function == 0) { if(mode==0) f="km/h"; else f=" m/s"; }
-  if (function == 1) { if(mode==0) f="dist"; else f= m1 > 9999 ? "  km" : "   m"; }
+  if (function == 1) { if(mode==0) f="dist"; else f= m1 > 9999 ? "km  " : "metr"; }
   if (function == 2) f="giri";
   if (function == 3) f="time";
   ledprint(f.c_str(),&alpha4,0);
@@ -176,6 +176,7 @@ void loop() {
       // change function
       //
       function++;
+      mode =0;
       if (function>3) function = 0;
       
       // display changed function
