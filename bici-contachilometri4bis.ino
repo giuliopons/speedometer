@@ -23,6 +23,8 @@
 
 #include <Wire.h>
 #include "Adafruit_LEDBackpack.h"
+#include <avr/wdt.h>
+#include <EEPROM.h>
 
 Adafruit_AlphaNum4 alpha4 = Adafruit_AlphaNum4();
 
@@ -44,11 +46,11 @@ void ledprint(char* str, Adafruit_AlphaNum4 *alphanum, int startpos) {
 
 const byte IS_PRESSED = 0;
 const byte IS_NOT_PRESSED = 1;
+
 const byte SHOW_SPEED = 0;
 const byte SHOW_DISTANCE = 1;
 const byte SHOW_SPINS = 2;
 const byte SHOW_TIME = 3;
-
 
 int buttonPin1 = 7;
 int buttonPin2 = 5;
@@ -77,6 +79,8 @@ int deltat = 2; //sec         // time window of refresh of the counter
 unsigned long w = 0;          // timer for velocity display from previous speed to the current one
 unsigned long t_mag = 0;      // timer to show the magnet passage
 unsigned long t_dis = 0;     // timer for button1, when > 0 display is in use to show message/label
+unsigned long t_save = 0;     // timer for saving data
+unsigned long t_reset = 0;     // timer for resetting data
 unsigned long timepass;       // timer for tempo
 
 byte function = 0;             // 0 =show km/h   1= show km     2= show giri    3 = show elapsed time
@@ -86,14 +90,48 @@ byte mode = 0;                 // 0/1/2...  show variation of each function
 unsigned int spin = 0;         // max 65.535 spins => max 146km 
 float inc;
 unsigned long sec;
+unsigned long sec0;           // saved value
+int sec_press = 0;
+
+
+
+const int FLAG_ADDRESS = 0;        // Indirizzo del byte di controllo
+const byte FLAG_VALUE = 0x42;      // Valore del byte di controllo (puoi scegliere un altro valore)
+const int DATA_ADDRESS = 1;        // Inizia i dati dall'indirizzo successivo
+const int SPIN_ADDRESS = 1;         // Indirizzo di partenza per "spin"
+const int SEC_ADDRESS = 5;          // Indirizzo di partenza per "sec"
+
+
+void saveData() {
+  EEPROM.put(SPIN_ADDRESS, spin);
+    EEPROM.put(SEC_ADDRESS, sec);
+    EEPROM.write(FLAG_ADDRESS, FLAG_VALUE);
+}
+
+void loadData() {
+   EEPROM.get(SPIN_ADDRESS, spin);
+   EEPROM.get(SEC_ADDRESS, sec0);
+   m1 = p * spin;
+   m0 = m1;
+}
 
 void setup() {
   Serial.begin(9600);
+
+   if (EEPROM.read(FLAG_ADDRESS) != FLAG_VALUE) {
+    saveData();
+    
+   } else {
+     loadData();
+   }
   pinMode (reedSensor, INPUT);
   pinMode (buttonPin1, INPUT_PULLUP);
   pinMode (buttonPin2, INPUT_PULLUP);
 
   Serial.println("Start");  
+
+  Serial.println("sec: " + (String)sec0);
+  Serial.println("spins: " + (String)spin);
   alpha4.begin(0x70);  // pass in the address
   alpha4.clear();
   alpha4.writeDisplay();
@@ -158,9 +196,6 @@ float slideNumber( float from, float to, float inc, int pos, String u ) {
 }
 
 
-
-
-
 void loop() {
 
   unsigned long t = millis() + deltat * 1000;
@@ -170,7 +205,7 @@ void loop() {
 
     // check buttons and perform actions
     // --------------------------------------------------------------
-    // button
+    // left button
     byte b1 = digitalRead(buttonPin1);    // 0 pressed, 1 not pressed
     byte b2 = digitalRead(buttonPin2);    // 0 pressed, 1 not pressed
     
@@ -180,7 +215,7 @@ void loop() {
       //
       button1_status = IS_PRESSED;
     }
-    if(b1 == IS_NOT_PRESSED && button1_status == IS_PRESSED) {
+    if(b1 == IS_NOT_PRESSED && button1_status == IS_PRESSED && sec_press == 0) {
       //
       // button has been released 
       // change function
@@ -194,21 +229,12 @@ void loop() {
 
       button1_status = IS_NOT_PRESSED;
     }
-    if(millis()>t_dis && t_dis > 0) {
-      //
-      // terminate showing changed function
-      //
-      alpha4.clear(); 
-      t_dis = 0; // now display can be used
 
-    }
-    // --------------------------------------------------------------
-
-  
+    // right button
     if(b2 == IS_PRESSED && button2_status == IS_NOT_PRESSED) {
      button2_status = IS_PRESSED;
     }
-    if(b2 == IS_NOT_PRESSED && button2_status == IS_PRESSED) {
+    if(b2 == IS_NOT_PRESSED && button2_status == IS_PRESSED && sec_press == 0) {
       mode++;
       if(function == SHOW_SPEED && mode==3) mode=0;
       if(function == SHOW_DISTANCE && mode==2) mode=0;
@@ -220,7 +246,61 @@ void loop() {
       showFunction();     
     }
 
+    // two buttons together
+    if(b2 == IS_PRESSED && b1 == IS_PRESSED) {
+      if( t_save == 0) {
+        button2_status = IS_PRESSED;
+        button1_status = IS_PRESSED;
+        t_save = millis();
+      } else {
+        sec_press = (millis() - t_save ) / 1000;
 
+        if (sec_press > 4 && sec_press<10 && t_dis==0) {
+            t_dis = millis() + 5000;
+            String sm = "save";
+            ledprint(sm.c_str(),&alpha4,0);
+            Serial.println("save");
+            saveData();
+        }
+
+        if (sec_press >=10 && t_dis>0) {
+            t_dis = millis() + 5000;
+            String sm = "del ";
+            ledprint(sm.c_str(),&alpha4,0);
+            Serial.println("del");
+            sec = 0;
+            spin = 0;
+            saveData();
+            wdt_enable(WDTO_2S);
+            delay(100);
+        }
+        
+        
+        
+          
+      }
+      
+      
+    }
+
+    if(b2 == IS_NOT_PRESSED && b1 == IS_NOT_PRESSED && t_save > 0) {
+      t_dis = millis() + 3000;
+      String sm = "OK  ";
+      ledprint(sm.c_str(),&alpha4,0);
+      t_save = 0;
+    }
+ 
+
+
+    if(millis()>t_dis && t_dis > 0) {
+      //
+      // terminate showing changed function
+      //
+      alpha4.clear(); 
+      t_dis = 0; // now display can be used
+      sec_press = 0;
+
+    }
  
     if (function == SHOW_SPEED) {
         // if enaugh time has passed print speed, show variation gradually
@@ -343,13 +423,13 @@ void loop() {
     }
 
 
-     
+    // count seconds
+    sec = sec0 + ( millis() - timepass ) / 1000; // saved sec + seconds from beginning
+ 
    } //deltat
 
   
 
-   // count seconds
-   sec = ( millis() - timepass ) / 1000; // seconds from beginning
 
    // speed and distance are constantly updated
    // even if the function is not speed or distance
