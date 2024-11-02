@@ -123,7 +123,7 @@ void showFunction() {
   String f = "";
   if (function == 0) { if(mode==0) f=" KPH"; if (mode==1) f=" MPS"; if (mode==2) f="mean";}
   if (function == 1) { if(mode==0) f="dist"; else f= m1 > 9999 ? "km  " : "metr"; }
-  if (function == 2) f="giri";
+  if (function == 2) { if(mode==0) f="giri"; else f=" RPM";}
   if (function == 3) f="time";
   ledprint(f.c_str(),&alpha4,0);
   t_dis = millis() + 1000; // display is in use, showing function for a second
@@ -207,7 +207,7 @@ void loop() {
       mode++;
       if(function ==0 && mode==3) mode=0;
       if(function ==1 && mode==2) mode=0;
-      if(function ==2) mode=0;
+      if(function ==2 && mode==2) mode=0;
       if(function ==3) mode=0;
       
      button2_status = IS_NOT_PRESSED;
@@ -266,15 +266,25 @@ void loop() {
 
     if (function==2) {
         float g = spin;
-        String sm = String(int(g));
-        if (g>9999) {
-          g = g/1000;
-          sm = String(g);
-          sm.remove(sm.length()-1,1);
-          sm = sm + "k";
-        }
-        if( t_dis == 0 ) {
-          ledprint(sm.c_str(),&alpha4,0);
+
+        if (mode == 0) {
+          String sm = String(int(g));
+          if (g>9999) {
+            g = g/1000;
+            sm = String(g);
+            sm.remove(sm.length()-1,1);
+            sm = sm + "k";
+          }
+          if( t_dis == 0 ) {
+            ledprint(sm.c_str(),&alpha4,0);
+          }
+        } else {
+          // rpm
+          String sm = String(int( 60.0 * spin / sec ));
+          if( t_dis == 0 ) {
+            ledprint(sm.c_str(),&alpha4,0);
+          }
+          
         }
     }
 
@@ -338,24 +348,28 @@ void loop() {
    } //deltat
 
   
-   // store previous speed
-   v0=v1;
 
    // count seconds
    sec = ( millis() - timepass ) / 1000; // seconds from beginning
 
-   // calculate new speed (km/h) (kph)
-   if( mode == 0) {
-      v1 = round ( (count*p / deltat) * 3.6 * 10.0 ) / 10.0; 
+   if( function == 0) {
+     // store previous speed
+     v0=v1;
+
+     // calculate new speed (km/h) (kph)
+     if( mode == 0) {
+        v1 = round ( (count*p / deltat) * 3.6 * 10.0 ) / 10.0; 
+     }
+     if(mode==1)  // mps
+     {
+        v1 = round ( (count*p / deltat) * 10.0 ) / 10.0; 
+     }
+     if(mode==2) {   //kph  mean value
+        v1 = round ( (spin*p / sec) * 3.6 * 10.0 ) / 10.0;
+     }
+
    }
-   if(mode==1)  // mps
-   {
-      v1 = round ( (count*p / deltat) * 10.0 ) / 10.0; 
-   }
-   if(mode==2) {   //kph  mean value
-      v1 = round ( (spin*p / sec) * 3.6 * 10.0 ) / 10.0;
-   }
-   
+  
    count=0; // reset counter for spins in deltat seconds
 
 }
