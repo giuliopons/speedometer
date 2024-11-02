@@ -27,4 +27,11 @@ The right button switches through sub-functions (or "modes"):
 - Distance: show units / hide units
 - Rounds: total spins / rpm
 
+Special functions to save data in EEPROM:
 
+- Press both the buttons for 5 seconds will save data (spins and time passed)
+- Keep buttons pressed for 10 seconds will delete data and restart the Arduino
+
+Next thing to do:
+Automatically save data when turning the Arduino off, by using a CAP and a voltage read to detect power off and save just before powering off:
+https://chatgpt.com/share/6726094c-0564-800c-a1c1-479772cbc928
