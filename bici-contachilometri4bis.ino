@@ -1,6 +1,6 @@
 //
 // Speedometer with interupt
-// smooth numbers
+// and smooth number variation
 //
 
 // arduino nano wiring
@@ -9,7 +9,7 @@
 //   5V --- BUT1 --- D7
 //   5V --- BUT2 --- D5
 //   
-//   Reed Sensor D2, 5V, GND
+//   Reed Sensor: D2, 5V, GND
 //
 //   Display
 //    SCL  --- A4
@@ -49,15 +49,16 @@ int buttonPin1 = 7;
 int buttonPin2 = 5;
 
 int reedSensor = 2;  // reed sensor
-int count = 0;       // counter of wheel loops in time deltat seconds
+unsigned int count = 0;       // counter of wheel loops in time deltat seconds
 byte button1_status = IS_NOT_PRESSED; // button status
+byte button2_status = IS_NOT_PRESSED; // button status
 
 volatile int flag = 0;  // used in interrupt
 
-float v1 = 0;        // current speed value
+float v1 = 0;       // current speed value
 float v0 = 0;       // previous speed value
-float m = 0;        // current meters
-
+float m1 = 0;       // current meters
+float m0 = 0;       // previous meters
 //
 // I store 2 values to gradually move numbers from previous speed to current speed
 // to have a better smooth display movement
@@ -69,12 +70,16 @@ int deltat = 2; //sec         // time window of refresh of the counter
 
 unsigned long w = 0;          // timer for velocity display from previous speed to the current one
 unsigned long t_mag = 0;      // timer to show the magnet passage
-unsigned long t_but1 = 0;     // timer for button1
+unsigned long t_dis = 0;     // timer for button1, when > 0 display is in use to show message/label
 unsigned long timepass;       // timer for tempo
 
-int function = 0;             // 0 =show km/h   1= show km     2= show giri    3 = show elapsed time
+byte function = 0;             // 0 =show km/h   1= show km     2= show giri    3 = show elapsed time
+byte mode = 0;                 // 0/1  show variation of each function
 
-int spin = 0;
+
+unsigned int spin = 0;         // max 65.535 spins => max 146km 
+float inc;
+unsigned long sec;
 
 void setup() {
   Serial.begin(9600);
@@ -101,40 +106,54 @@ void setup() {
 // function called every time the reed sensor value changes (the magnet has passed)
 void magnetPassage(){
   byte a=digitalRead(reedSensor);
-  
-  if(a==0 && flag==0) { flag++; Serial.print(a); }
+  if(a==0 && flag==0) {
+    flag++;
+  }
   EIFR = 0x01;    // EIFR (External Interrupt Flag Register) reset interrupt?
 }
 
 
 
-float val0=0;
-float val1=0;
-float inc;
-unsigned long sec;
-bool asteriskmode;
 
 
 // display the function and set the timer to reset display
+// function displayed is determined by function and mode
 void showFunction() {
   String f = "";
-  if (function == 0) f="km/h";
-  if (function == 1) f="dist";
+  if (function == 0) { if(mode==0) f="km/h"; else f=" m/s"; }
+  if (function == 1) { if(mode==0) f="dist"; else f= m1 > 9999 ? "  km" : "   m"; }
   if (function == 2) f="giri";
   if (function == 3) f="time";
   ledprint(f.c_str(),&alpha4,0);
-  t_but1 = millis() + 1000; // display is showing function for a second
+  t_dis = millis() + 1000; // display is in use, showing function for a second
 }
 
+float slideNumber( float from, float to, float inc, int pos, String u ) {
+
+  if(millis() > w ) {
+   w =millis() + 20; // next timer
+   if( ( to > from && from+inc < to) || (to < from && from + inc > 0) ) from = from+inc;
+   
+  if(t_dis==0) {
+    String s = (String)round(from);
+
+    s = s + u;
+
+    if(from < 1000 && pos == 0 && u == "") s = " "+s; // left pad
+    if(from < 100) s = " "+s; // left pad     
+    if(from < 10) s = " "+s;  // left pad     
+  
+    ledprint(s.c_str(),&alpha4, pos );        
+  }
+ }
+
+ return from;
+  
+}
 
 void loop() {
 
   unsigned long t = millis() + deltat * 1000;
-  
-  String s0="";
-  String s="";
-
-  
 
   // every deltat seconds
   while(t>millis()) {
@@ -148,10 +167,14 @@ void loop() {
     if(b1 == IS_PRESSED && button1_status == IS_NOT_PRESSED) {
       //
       // button has been pressed
+      //
       button1_status = IS_PRESSED;
     }
     if(b1 == IS_NOT_PRESSED && button1_status == IS_PRESSED) {
+      //
       // button has been released 
+      // change function
+      //
       function++;
       if (function>3) function = 0;
       
@@ -160,110 +183,91 @@ void loop() {
 
       button1_status = IS_NOT_PRESSED;
     }
-    if(button1_status==IS_NOT_PRESSED && millis()>t_but1 && t_but1 > 0) {
+    if(millis()>t_dis && t_dis > 0) {
+      //
       // terminate showing changed function
+      //
       alpha4.clear(); 
-      t_but1 = 0; // now display can be used
+      t_dis = 0; // now display can be used
 
     }
     // --------------------------------------------------------------
 
-
-
-
-
-
-
-    //delay(50);
-
-
-    // status:
-    spin = spin;  // spins of the wheel from interrupt
-    v1 = v1;      // speed calculated every deltat
-    m = p * spin; // distance in meters
-    sec = ( millis() - timepass ) / 1000; // seconds from beginning
-    
-
-    // functions
-
-    if (function == 0) {    // km/h mode
-      val1 = v1;
-      inc = (v1-v0) / 10.0;  // gradually change from one speed to next in 5 steps
-      val0 = val0 + inc;
-      asteriskmode = true;
+  
+    if(b2 == IS_PRESSED && button2_status == IS_NOT_PRESSED) {
+     button2_status = IS_PRESSED;
     }
-    if (function==1 && button1_status==IS_NOT_PRESSED) {
-      val1 = m;
-      asteriskmode = false;
+    if(b2 == IS_NOT_PRESSED && button2_status == IS_PRESSED) {
+      if (mode == 0) mode = 1; else mode = 0;
+     button2_status = IS_NOT_PRESSED;
+      // display changed function
+      showFunction();     
     }
-    if (function==2 && button1_status==IS_NOT_PRESSED) {
-      val1 = spin;
-      asteriskmode = false;
-    }
-    if (function==3 && button1_status==IS_NOT_PRESSED) {
-      val1 = sec;
-      asteriskmode = false;
-    }
-   
- 
+
+
  
     if (function==0) {
         // if enaugh time has passed print speed, show variation gradually
-        if(millis() > w ) {
-          w =millis() + 20; // next timer
-          //v0 = v0 + inc; // add increment
-          if( ( v1 > v0 && v0+inc < v1) || (v1 < v0 && v0 + inc > 0) ) v0 = v0+inc;
-            
-          s = (String)round(v0);
-          if(v0 < 100) s = " "+s; // left pad     
-          if(v0 < 10) s = " "+s;  // left pad     
-          if(s0!=s) {
-            //alpha4.clear();
-            if(button1_status==IS_NOT_PRESSED && t_but1==0) {
-              alpha4.writeDigitAscii(1,' '); alpha4.writeDigitAscii(2,' '); alpha4.writeDigitAscii(3,' ');
-              ledprint(s.c_str(),&alpha4,1);        
-            }
-            s0=s;
-          }        
-        }
+        inc = (v1-v0) / 10.0;
+        v0 = slideNumber( v0, v1, inc, 1, "" );
     }
 
 
     // m e km
-    if (function==1 && button1_status==IS_NOT_PRESSED) {
-
+    if (function==1) {
         String u = "m";
-
         String sm ="";
-        if(m > 999) {
-          u =  "km";
-          m = m/1000;
-          if(m>9.9) sm = String(round(m)); else {
-            sm = String(round(m * 10.0) / 10.0);
-            sm.remove(sm.length()-1,1);
+        float d  = m1;
+
+        if(mode ==0) {
+
+          if(d > 999) {
+            u =  "km";
+            d = d/1000;
+            if(d>9.9) sm = String(int(d)); else {
+              sm = String(round(d * 10.0) / 10.0);
+              sm.remove(sm.length()-1,1);
+              sm = sm + u;
+              if(  t_dis==0) ledprint(sm.c_str(),&alpha4,0); 
+            }
+          } else {
+            m0 = slideNumber(m0,m1,.1,0, u);       
           }
+           
+          
         } else {
-          // @todo smooth numbers also here...
-          sm = String(round(m));
-          if(m < 100) sm = " "+sm; // left pad     
-          if(m < 10) sm = " "+sm;  // left pad               
+          if(d > 9999) {
+              d = d/1000;
+              sm = String(int(d * 10.0) / 10.0);
+              if(d < 100) sm = " "+sm; // left pad  
+              sm.remove(sm.length()-1,1);
+              sm = sm + u;
+              if(  t_dis==0) ledprint(sm.c_str(),&alpha4,0); 
+          } else {
+            m0 = slideNumber(m0,m1,.1,0, "");
+          }
         }
-
-        u = sm + u;
-        
-        if(  t_but1==0 ) ledprint(u.c_str(),&alpha4,0);        
         
     }
 
 
 
-    if (function==2 && button1_status==IS_NOT_PRESSED  && t_but1 == 0) {
-        ledprint(String(spin).c_str(),&alpha4,0);        
-        
+    if (function==2) {
+        float g = spin;
+        String sm = String(int(g));
+        if (g>9999) {
+          g = g/1000;
+          sm = String(g);
+          sm.remove(sm.length()-1,1);
+          sm = sm + "k";
+        }
+        if( t_dis == 0 ) {
+          ledprint(sm.c_str(),&alpha4,0);
+        }
     }
 
 
-    if (function==3 && button1_status==IS_NOT_PRESSED) {
+    if (function==3) {
         
         int hours = (sec / 60) / 60;
         int minutes = (sec / 60) % 60;
@@ -276,7 +280,7 @@ void loop() {
         char oo[2];
         sprintf(oo,"%02d", hours);
 
-        if( t_but1 == 0) {
+        if( t_dis == 0) {
           if (hours > 0) {
             // write hours and minutes
             ledprint(strcat(strcat(oo,"."),mm),&alpha4,0);        
@@ -288,9 +292,11 @@ void loop() {
     }
 
     if(flag>0) {
-      // interrupt has been called, I have to update counters and show magnet passage
+      //
+      // interrupt has been called, flag is > 0, I have to update counters and show magnet passage
+      //
       if(function==0) {
-          if(button1_status==IS_NOT_PRESSED && t_but1==0) {
+          if(t_dis==0) {
             alpha4.writeDigitAscii(0,'*');alpha4.writeDisplay(); // show magnet passage
           }
           t_mag =millis() + 100; // next timer
@@ -298,23 +304,41 @@ void loop() {
       flag=0;
       count++;    // counter for spins in deltat seconds
       spin++;     // total count of spins
+
+      // status:
+      spin = spin;  // spins of the wheel from interrupt
+      v1 = v1;      // speed calculated every deltat
+      m0=m1;         // store previous
+      m1 = p * spin; // distance in meters
+      
+  
+      //Serial.println("giri:" + (String)spin + " v1:" + String(v1) + " m:" + String(m1) + " sec:"+String(sec));
+
     } 
 
-    if(function==0 && button1_status==IS_NOT_PRESSED) {
-      if (millis()>t_mag  && t_but1==0) {
+    if(function==0 ) {
+      if (millis()>t_mag  && t_dis==0) {
         alpha4.writeDigitAscii(0,' ');alpha4.writeDisplay(); 
       } // clear show magnet passage
     }
 
      
-   }
+   } //deltat
 
   
    // store previous speed
    v0=v1;
+
+   // count seconds
+   sec = ( millis() - timepass ) / 1000; // seconds from beginning
+
    // calculate new speed (km/h) (kph)
-   v1 = round ( (count*p / deltat) * 3.6 * 10.0 ) / 10.0;
-   // Serial.println("\nv1:" + (String)v1 + " count:"+(String)count);
-   count=0;
+   if( mode == 0) {
+      v1 = round ( (count*p / deltat) * 3.6 * 10.0 ) / 10.0; 
+   } else {
+      v1 = round ( (count*p / deltat) * 10.0 ) / 10.0; 
+   }
+   
+   count=0; // reset counter for spins in deltat seconds
 
 }
