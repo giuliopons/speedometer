@@ -44,6 +44,11 @@ void ledprint(char* str, Adafruit_AlphaNum4 *alphanum, int startpos) {
 
 const byte IS_PRESSED = 0;
 const byte IS_NOT_PRESSED = 1;
+const byte SHOW_SPEED = 0;
+const byte SHOW_DISTANCE = 1;
+const byte SHOW_SPINS = 2;
+const byte SHOW_TIME = 3;
+
 
 int buttonPin1 = 7;
 int buttonPin2 = 5;
@@ -121,10 +126,10 @@ void magnetPassage(){
 // function displayed is determined by function and mode
 void showFunction() {
   String f = "";
-  if (function == 0) { if(mode==0) f=" KPH"; if (mode==1) f=" MPS"; if (mode==2) f="mean";}
-  if (function == 1) { if(mode==0) f="dist"; else f= m1 > 9999 ? "km  " : "metr"; }
-  if (function == 2) { if(mode==0) f="giri"; else f=" RPM";}
-  if (function == 3) f="time";
+  if (function == SHOW_SPEED) { if(mode==0) f=" KPH"; if (mode==1) f=" MPS"; if (mode==2) f="mean";}
+  if (function == SHOW_DISTANCE) { if(mode==0) f="dist"; else f= m1 > 9999 ? "km  " : "metr"; }
+  if (function == SHOW_SPINS) { if(mode==0) f="giri"; else f=" RPM";}
+  if (function == SHOW_TIME) f="time";
   ledprint(f.c_str(),&alpha4,0);
   t_dis = millis() + 1000; // display is in use, showing function for a second
 }
@@ -205,10 +210,10 @@ void loop() {
     }
     if(b2 == IS_NOT_PRESSED && button2_status == IS_PRESSED) {
       mode++;
-      if(function ==0 && mode==3) mode=0;
-      if(function ==1 && mode==2) mode=0;
-      if(function ==2 && mode==2) mode=0;
-      if(function ==3) mode=0;
+      if(function == SHOW_SPEED && mode==3) mode=0;
+      if(function == SHOW_DISTANCE && mode==2) mode=0;
+      if(function == SHOW_SPINS && mode==2) mode=0;
+      if(function == SHOW_TIME) mode=0;
       
      button2_status = IS_NOT_PRESSED;
       // display changed function
@@ -217,16 +222,15 @@ void loop() {
 
 
  
-    if (function==0) {
+    if (function == SHOW_SPEED) {
         // if enaugh time has passed print speed, show variation gradually
         inc = (v1-v0) > 0 ? .2 : -.2;
         v0 = slideNumber( v0, v1, inc, 1, "" );
-        
     }
 
 
     // m e km
-    if (function==1) {
+    if (function == SHOW_DISTANCE) {
         String u = "m";
         String sm ="";
         float d  = m1;
@@ -264,7 +268,7 @@ void loop() {
 
 
 
-    if (function==2) {
+    if (function == SHOW_SPINS) {
         float g = spin;
 
         if (mode == 0) {
@@ -289,7 +293,7 @@ void loop() {
     }
 
 
-    if (function==3) {
+    if (function == SHOW_TIME) {
         
         int hours = (sec / 60) / 60;
         int minutes = (sec / 60) % 60;
@@ -317,7 +321,7 @@ void loop() {
       //
       // interrupt has been called, flag is > 0, I have to update counters and show magnet passage
       //
-      if(function==0) {
+      if(function == SHOW_SPEED) {
           if(t_dis==0) {
             alpha4.writeDigitAscii(0,'*');alpha4.writeDisplay(); // show magnet passage
           }
@@ -327,22 +331,17 @@ void loop() {
       count++;    // counter for spins in deltat seconds
       spin++;     // total count of spins
 
-      // status:
-      spin = spin;  // spins of the wheel from interrupt
-      v1 = v1;      // speed calculated every deltat
-      m0=m1;         // store previous
+      m0=m1;         // store previous  
       m1 = p * spin; // distance in meters
-      
-  
-      //Serial.println("giri:" + (String)spin + " v1:" + String(v1) + " m:" + String(m1) + " sec:"+String(sec));
 
     } 
 
-    if(function==0 ) {
+    if(function == SHOW_SPEED) {
       if (millis()>t_mag  && t_dis==0) {
         alpha4.writeDigitAscii(0,' ');alpha4.writeDisplay(); 
       } // clear show magnet passage
     }
+
 
      
    } //deltat
@@ -352,23 +351,26 @@ void loop() {
    // count seconds
    sec = ( millis() - timepass ) / 1000; // seconds from beginning
 
-   if( function == 0) {
-     // store previous speed
-     v0=v1;
-
-     // calculate new speed (km/h) (kph)
-     if( mode == 0) {
-        v1 = round ( (count*p / deltat) * 3.6 * 10.0 ) / 10.0; 
-     }
-     if(mode==1)  // mps
-     {
-        v1 = round ( (count*p / deltat) * 10.0 ) / 10.0; 
-     }
-     if(mode==2) {   //kph  mean value
-        v1 = round ( (spin*p / sec) * 3.6 * 10.0 ) / 10.0;
-     }
-
+   // speed and distance are constantly updated
+   // even if the function is not speed or distance
+   // because if it changes the function the values must be
+   // the current ones to slide properly between numbers
+   
+   // store previous speed
+   v0=v1;
+  
+   // calculate new speed (km/h) (kph)
+   if( (function == SHOW_SPEED && mode == 0 ) || function != SHOW_SPEED) {
+      v1 = round ( (count*p / deltat) * 3.6 * 10.0 ) / 10.0; 
    }
+   if( function == SHOW_SPEED && mode==1)  // mps
+   {
+      v1 = round ( (count*p / deltat) * 10.0 ) / 10.0; 
+   }
+   if(function == SHOW_SPEED && mode==2) {   //kph  mean value
+      v1 = round ( (spin*p / sec) * 3.6 * 10.0 ) / 10.0;
+   }
+   
   
    count=0; // reset counter for spins in deltat seconds
 
